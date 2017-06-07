@@ -1,5 +1,6 @@
-from id3 import Value
 import numpy as np
+from id3 import Value
+
 
 class Outlook(Value):
     SUNNY = 5
