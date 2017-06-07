@@ -1,73 +1,13 @@
 from enum import Enum
 import numpy as np
 
-
 class Value(Enum):
     pass
 
 
-class Outlook(Value):
-    SUNNY = 2
-    OVERCAST = 1
-    RAIN = 5
-
-
-class Temperature(Value):
-    HOT = 0
-    MILD = 1
-    COOL = 2
-
-
-class Humidity(Value):
-    HIGH = 0
-    NORMAL = 1
-
-
-class Wind(Value):
-    WEAK = 0
-    STRONG = 1
-
-
-class Play(Value):
-    NO = 0
-    YES = 1
-
-
-def to_values(enums):
-    return [value.value for value in enums]
-
-
-x_outlook = to_values([Outlook.SUNNY, Outlook.SUNNY, Outlook.OVERCAST, Outlook.RAIN, Outlook.RAIN, Outlook.RAIN,
-                       Outlook.OVERCAST,
-                       Outlook.SUNNY, Outlook.SUNNY, Outlook.RAIN, Outlook.SUNNY, Outlook.OVERCAST, Outlook.OVERCAST,
-                       Outlook.RAIN])
-
-x_temperature = to_values([Temperature.HOT, Temperature.HOT, Temperature.HOT, Temperature.MILD, Temperature.COOL,
-                           Temperature.COOL,
-                           Temperature.COOL, Temperature.MILD, Temperature.COOL, Temperature.MILD, Temperature.MILD,
-                           Temperature.MILD, Temperature.HOT, Temperature.MILD])
-
-x_humidity = to_values([Humidity.HIGH, Humidity.HIGH, Humidity.HIGH, Humidity.HIGH, Humidity.NORMAL, Humidity.NORMAL,
-                        Humidity.NORMAL, Humidity.HIGH, Humidity.NORMAL, Humidity.NORMAL, Humidity.NORMAL,
-                        Humidity.HIGH,
-                        Humidity.NORMAL, Humidity.HIGH])
-
-x_wind = to_values(
-    [Wind.WEAK, Wind.STRONG, Wind.WEAK, Wind.WEAK, Wind.WEAK, Wind.STRONG, Wind.STRONG, Wind.WEAK, Wind.WEAK,
-     Wind.WEAK, Wind.STRONG, Wind.STRONG, Wind.WEAK, Wind.STRONG])
-
-x = [x_outlook, x_temperature, x_humidity, x_wind]
-attribute_labels = [Outlook, Temperature, Humidity, Wind]
-
-y = [value.value for value in
-     [Play.NO, Play.NO, Play.YES, Play.YES, Play.YES, Play.NO, Play.YES, Play.NO, Play.YES, Play.YES, Play.YES,
-      Play.YES, Play.YES, Play.NO]]
-
-class_label = Play
-
 class DecisionTree:
     class TreeNode:
-        def __init__(self, label=None, values=None, children=None):
+        def __init__(self, label=None, values=None, children=[]):
             self.label = label
             self.values = values
             self.children = children
@@ -104,9 +44,9 @@ class DecisionTree:
 
     def build_tree(self, attributes, attribute_labels, classifications, class_label):
         if self.is_pure(classifications):
-            return self.TreeNode(class_label(set(classifications).pop()), set(classifications))
+            return self.TreeNode(class_label, [set(classifications).pop()])
         elif self.no_more_attribute(attributes):
-            return self.TreeNode(values=set(classifications))
+            return self.TreeNode(class_label, np.unique(classifications).tolist())
 
         information_gains = [self.information_gain(attribute, classifications) for attribute in attributes]
         best_attribute_index = np.argmax(information_gains)
@@ -125,14 +65,32 @@ class DecisionTree:
 
         subsets = zip(attributes_subsets, classification_subsets)
         best_attribute_values = [best_attribute_label(value) for value in best_attribute_values]
-        children = [self.build_tree(subset[0], attribute_labels, subset[1], class_label) for subset in subsets]
+        children = [child for child in [self.build_tree(subset[0], attribute_labels, subset[1], class_label) for subset in subsets] if child is not None]
         return self.TreeNode(best_attribute_label, best_attribute_values, children)
 
     def fit(self, attributes, attribute_labels, classifications, class_label):
+        attributes = np.transpose(attributes).tolist()
         self._root = self.build_tree(attributes, attribute_labels, classifications, class_label)
 
+    def __predict(self, node, attributes, attribute_labels, class_label):
+        if len(attributes) == 0 or node.label is class_label:
+            return node.values[0]
 
-decisionTree = DecisionTree()
-decisionTree.fit(x, attribute_labels, y, class_label)
+        attribute_index = np.nonzero([node.label == label for label in attribute_labels])[0][0]
+        attribute = attributes[attribute_index]
 
-decisionTree._root
+        value_index = (np.array([value.value for value in node.values]) == attribute).nonzero()[0][0]
+
+        return self.__predict(node.children[value_index], self.slice(attributes, attribute_index), self.slice(attribute_labels, attribute_index), class_label)
+
+    def predict(self, attributes, attribute_labels, class_label):
+        if self._root is None:
+            return None
+
+        return [self.__predict(self._root, attribute, attribute_labels, class_label) for attribute in attributes]
+
+    def accuracy(self, attributes, expected_class, attribute_labels, class_label):
+        predicted_class = self.predict(attributes, attribute_labels, class_label)
+        values, counts = np.unique([tuple[0] == tuple[1] for tuple in zip(expected_class, predicted_class)], return_counts=True)
+        correct_count = counts[np.nonzero(values)[0]]
+        return correct_count / len(expected_class)
