@@ -7,9 +7,9 @@ class Value(Enum):
 
 
 class Outlook(Value):
-    SUNNY = 0
+    SUNNY = 2
     OVERCAST = 1
-    RAIN = 2
+    RAIN = 5
 
 
 class Temperature(Value):
@@ -59,16 +59,16 @@ x_wind = to_values(
 x = [x_outlook, x_temperature, x_humidity, x_wind]
 attribute_labels = [Outlook, Temperature, Humidity, Wind]
 
-
 y = [value.value for value in
      [Play.NO, Play.NO, Play.YES, Play.YES, Play.YES, Play.NO, Play.YES, Play.NO, Play.YES, Play.YES, Play.YES,
       Play.YES, Play.YES, Play.NO]]
 
+class_label = Play
 
 class DecisionTree:
     class TreeNode:
-        def __init__(self, attribute_label, values, children):
-            self.attribute_label = attribute_label
+        def __init__(self, label=None, values=None, children=None):
+            self.label = label
             self.values = values
             self.children = children
 
@@ -80,8 +80,10 @@ class DecisionTree:
         probabilities = [count / len(values) for count in counts]
         return np.sum([-probability * np.math.log(probability, 2) for probability in probabilities])
 
-    def partition(self, attribute, classifications):
-        return [np.array(classifications)[(np.array(attribute) == value).nonzero()[0]] for value in np.unique(attribute)]
+    def partition(self, attribute, classifications, values=None):
+        if values is None:
+            values = np.unique(attribute)
+        return [np.array(classifications)[(np.array(attribute) == value).nonzero()[0]] for value in values]
 
     def information_gain(self, attribute, classifications):
         original_entropy = self.entropy(classifications)
@@ -97,31 +99,40 @@ class DecisionTree:
     def no_more_attribute(self, attributes):
         return len(attributes) == 0
 
-    def build_tree(self, attributes, attribute_labels, classifications):
-        if self.is_pure(classifications) or self.no_more_attribute(attributes):
-            return None
+    def slice(self, original_list, index):
+        return original_list[:index] + original_list[index + 1:]
+
+    def build_tree(self, attributes, attribute_labels, classifications, class_label):
+        if self.is_pure(classifications):
+            return self.TreeNode(class_label(set(classifications).pop()), set(classifications))
+        elif self.no_more_attribute(attributes):
+            return self.TreeNode(values=set(classifications))
 
         information_gains = [self.information_gain(attribute, classifications) for attribute in attributes]
         best_attribute_index = np.argmax(information_gains)
         best_attribute_label = attribute_labels[best_attribute_index]
         best_attribute = attributes[best_attribute_index]
 
+        attributes = self.slice(attributes, best_attribute_index)
+        attribute_labels = self.slice(attribute_labels, best_attribute_index)
 
-        attributes = attributes[:best_attribute_index] + attributes[best_attribute_index + 1:]
-        attribute_labels = attribute_labels[:best_attribute_index] + attribute_labels[
-                                                                                 best_attribute_index + 1:]
-        classification_subsets = [subset.tolist() for subset in self.partition(best_attribute, classifications)]
-        attributes_subsets = np.transpose([[subset.tolist() for subset in self.partition(best_attribute, attribute)] for attribute in attributes]).tolist()
+        best_attribute_values = np.unique(best_attribute)
+        classification_subsets = [subset.tolist() for subset in
+                                  self.partition(best_attribute, classifications, best_attribute_values)]
+        attributes_subsets = np.transpose(
+            [[subset.tolist() for subset in self.partition(best_attribute, attribute, best_attribute_values)] for
+             attribute in attributes]).tolist()
 
         subsets = zip(attributes_subsets, classification_subsets)
-        return self.TreeNode(best_attribute_label, [best_attribute_label(value) for value in np.unique(best_attribute)],
-                             [self.build_tree(subset[0], attribute_labels, subset[1]) for subset in subsets])
+        best_attribute_values = [best_attribute_label(value) for value in best_attribute_values]
+        children = [self.build_tree(subset[0], attribute_labels, subset[1], class_label) for subset in subsets]
+        return self.TreeNode(best_attribute_label, best_attribute_values, children)
 
-    def fit(self, attributes, attribute_labels, classifications):
-        self._root = self.build_tree(attributes, attribute_labels, classifications)
+    def fit(self, attributes, attribute_labels, classifications, class_label):
+        self._root = self.build_tree(attributes, attribute_labels, classifications, class_label)
 
 
 decisionTree = DecisionTree()
-decisionTree.fit(x, attribute_labels, y)
+decisionTree.fit(x, attribute_labels, y, class_label)
 
 decisionTree._root
