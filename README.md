@@ -1,8 +1,8 @@
 # Machine Learning Algorithms
-
 Python implementation of fundamental machine learning algorithms.
 
-Here are the list of algorithms currently implemented:
+## Which algorithms can I get from here?
+Followings are the list of algorithms currently implemented in this project:
 
 * [ID3 Decision Tree](ID3-DECISION-TREE.md)
 
