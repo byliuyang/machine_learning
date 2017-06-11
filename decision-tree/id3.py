@@ -7,7 +7,7 @@ class Value(Enum):
     pass
 
 
-class DecisionTree:
+class ID3DecisionTree:
     class TreeNode:
         def __init__(self, label=None, values=None, children=[]):
             self.label = label
